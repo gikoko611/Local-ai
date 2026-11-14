@@ -122,11 +122,13 @@ fun SettingsScreen(vm: MainViewModel) {
         item {
             SectionCard("📐 Needs model reload") {
                 Text("Context size", color = GiColors.text, fontSize = 13.sp)
-                listOf(1024, 2048, 3072, 4096).forEach { n ->
+                RadioRow("🤖 Auto (match model + available memory)", s.nCtx == 0) { s.nCtx = 0; s.save() }
+                listOf(512, 1024, 2048, 3072, 4096).forEach { n ->
                     RadioRow("$n tokens", s.nCtx == n) { s.nCtx = n; s.save() }
                 }
+                Text("Auto mode checks the model training limit and retries with smaller context/batch sizes if RAM is insufficient.", color = GiColors.muted, fontSize = 11.sp)
                 SliderRow("CPU threads: ${s.threads}", s.threads.toFloat(), 1f..8f, 6) { s.threads = it.toInt(); s.save() }
-                Text("Tip: 4 threads and 2048 context suit a 4 GB phone.", color = GiColors.muted, fontSize = 11.sp)
+                Text("Low-RAM tip: Auto mode + 2 CPU threads. Context changes apply after reload.", color = GiColors.muted, fontSize = 11.sp)
                 OutlinedButton(onClick = { vm.reloadModel() }, enabled = !vm.busy, modifier = Modifier.fillMaxWidth()) {
                     Text("Apply & reload model")
                 }
