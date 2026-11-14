@@ -7,6 +7,7 @@
 #include <chrono>
 #include <string>
 #include <vector>
+#include <initializer_list>
 #include "llama.h"
 
 #define TAG "GILocalAI"
@@ -110,8 +111,8 @@ Java_com_gikoko_gilocalai_LlamaBridge_nativeInfo(JNIEnv * env, jobject, jlong ha
     char desc[256] = {0};
     llama_model_desc(e->model, desc, sizeof(desc));
     char buf[768];
-    snprintf(buf, sizeof(buf), "%s | %.2fB params | ctx %d | threads %d | %s",
-             desc, llama_model_n_params(e->model) / 1e9, e->n_ctx, e->n_threads, llama_print_system_info());
+    snprintf(buf, sizeof(buf), "%s | %.2fB params | ctx %s%d | threads %d | %s",
+             desc, llama_model_n_params(e->model) / 1e9, e->n_ctx <= 0 ? "AUTO (model/RAM) " : "", e->n_ctx, e->n_threads, llama_print_system_info());
     return env->NewStringUTF(buf);
 }
 
