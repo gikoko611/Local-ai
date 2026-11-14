@@ -328,7 +328,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
                 // 4) build the prompt so it fits the context window
                 val tpl = PromptBuilder.tplOf(settings.template)
-                val budget = settings.nCtx - settings.maxTokens - 48
+                val contextLimit = if (settings.nCtx <= 0) 512 else settings.nCtx
+                val budget = contextLimit - settings.maxTokens - 48
                 val hist = history.filter { it.text.isNotBlank() }
                 var histStart = maxOf(0, hist.size - settings.historyTurns * 2)
                 var hitCount = hits.size
