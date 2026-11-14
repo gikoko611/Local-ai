@@ -137,19 +137,38 @@ Java_com_gikoko_gilocalai_LlamaBridge_nativeGenerate(JNIEnv * env, jobject, jlon
     std::vector<llama_token> toks((size_t) n_prompt);
     if (llama_tokenize(vocab, prompt.c_str(), (int32_t) prompt.size(), toks.data(), n_prompt, true, true) < 0) return -2;
 
-    const int n_ctx = e->n_ctx;
-    if (n_prompt + 8 > n_ctx) return -3;
-    const int max_new = std::min((int) max_tokens, n_ctx - n_prompt - 1);
-
-    // A fresh context per answer keeps this wrapper independent of KV-cache API changes.
+    // Auto mode (n_ctx <= 0) starts from the model's trained limit, capped at 2048
+    // for low-memory phones. If allocation fails, progressively try smaller KV caches.
+    const int trained_ctx = (int) llama_model_n_ctx_train(e->model);
+    int requested = e->n_ctx > 0 ? e->n_ctx : std::min(trained_ctx > 0 ? trained_ctx : 2048, 2048);
+    if (trained_ctx > 0) requested = std::min(requested, trained_ctx);
+    const int candidates[] = { requested, 1024, 768, 512, 384, 256 };
+    llama_context * ctx = nullptr;
     llama_context_params cp = llama_context_default_params();
-    cp.n_ctx = (uint32_t) n_ctx;
-    cp.n_batch = (uint32_t) std::min(n_ctx, 512);
-    cp.n_ubatch = cp.n_batch;
-    cp.n_threads = e->n_threads;
-    cp.n_threads_batch = e->n_threads;
-    llama_context * ctx = llama_init_from_model(e->model, cp);
+    int n_ctx = 0;
+    int batch_sz = 64;
+    for (int candidate : candidates) {
+        if (candidate <= 0 || candidate > requested || candidate < n_prompt + 8) continue;
+        if (n_ctx == candidate) continue;
+        for (int batch : {64, 32, 16}) {
+            cp = llama_context_default_params();
+            cp.n_ctx = (uint32_t) candidate;
+            cp.n_batch = (uint32_t) std::min(candidate, batch);
+            cp.n_ubatch = (uint32_t) std::min((int) cp.n_batch, 32);
+            cp.n_threads = e->n_threads;
+            cp.n_threads_batch = e->n_threads;
+            ctx = llama_init_from_model(e->model, cp);
+            if (ctx) {
+                n_ctx = candidate;
+                batch_sz = (int) cp.n_batch;
+                LOGI("Context selected automatically: ctx=%d batch=%d trained=%d", n_ctx, batch_sz, trained_ctx);
+                break;
+            }
+        }
+        if (ctx) break;
+    }
     if (!ctx) return -4;
+    const int max_new = std::min((int) max_tokens, n_ctx - n_prompt - 1);
 
     llama_sampler * smpl = llama_sampler_chain_init(llama_sampler_chain_default_params());
     if (repeat_penalty > 1.0f) {
@@ -166,7 +185,6 @@ Java_com_gikoko_gilocalai_LlamaBridge_nativeGenerate(JNIEnv * env, jobject, jlon
     }
 
     int result = 0;
-    const int batch_sz = (int) cp.n_batch;
     for (int i = 0; i < n_prompt; i += batch_sz) {
         int cnt = std::min(batch_sz, n_prompt - i);
         llama_batch b = llama_batch_get_one(toks.data() + i, cnt);
