@@ -1,0 +1,10 @@
+*.iml
+.gradle/
+build/
+local.properties
+.idea/
+.cxx/
+app/.cxx/
+captures/
+# llama.cpp is cloned by the GitHub Actions workflow (or manually, see README)
+app/src/main/cpp/llama.cpp/
